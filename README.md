@@ -1,4 +1,4 @@
-# Loopin CRM
+# LoopIn CRM
 
 Never forget a customer. Never miss a follow-up. Never lose track of
 a payment.
