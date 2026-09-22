@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Nudge design system — deep forest green, warm cream, gold accent.
+   All colors in HSL. */
+
+@layer base {
+  :root {
+    --background: 42 38% 97%;
+    --foreground: 157 35% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 157 35% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 157 35% 11%;
+
+    --primary: 157 44% 17%;
+    --primary-foreground: 45 60% 97%;
+
+    --secondary: 46 40% 93%;
+    --secondary-foreground: 157 44% 15%;
+
+    --muted: 45 25% 94%;
+    --muted-foreground: 152 8% 40%;
+
+    --accent: 157 30% 92%;
+    --accent-foreground: 157 44% 14%;
+
+    --destructive: 0 70% 44%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 44 22% 88%;
+    --input: 44 22% 84%;
+    --ring: 157 44% 24%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 158 42% 11%;
+    --sidebar-foreground: 42 28% 82%;
+    --sidebar-primary: 40 60% 56%;
+    --sidebar-primary-foreground: 157 44% 10%;
+    --sidebar-accent: 158 38% 16%;
+    --sidebar-accent-foreground: 42 40% 92%;
+    --sidebar-border: 158 30% 18%;
+    --sidebar-ring: 40 60% 56%;
+
+    --gold: 40 65% 54%;
+    --gold-soft: 44 62% 92%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01";
+  }
+
+  ::selection {
+    @apply bg-gold-200 text-forest-950;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Fraunces", Georgia, serif;
+    font-optical-sizing: auto;
+  }
+
+  .card-lift {
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  .card-lift:hover {
+    @apply shadow-md border-forest-200;
+    transform: translateY(-1px);
+  }
+
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+/* Subtle entrance for cards & lists */
+@keyframes nudge-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: nudge-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes nudge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pop {
+  animation: nudge-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
