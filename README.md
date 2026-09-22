@@ -1,16 +1,16 @@
-Nudge CRM
+# Loopin CRM
 
 Never forget a customer. Never miss a follow-up. Never lose track of
 a payment.
 
-Nudge is a lightweight, WhatsApp-first CRM designed for small businesses
+Loopin is a lightweight, WhatsApp-first CRM designed for small businesses
 that manage customers, follow-ups, payments, and repeat business without
 wanting the complexity of a traditional enterprise CRM.
 
-✨ Why Nudge?
+✨ Why Loopin?
 
 Many small businesses manage customer information through WhatsApp
-chats, notebooks, spreadsheets, and memory. Nudge brings the essential
+chats, notebooks, spreadsheets, and memory. Loopin brings the essential
 workflow into one simple workspace:
 
 Customer → Charge/Payment → Follow-up → WhatsApp → Repeat Business
@@ -129,7 +129,7 @@ core product is being developed.
 
 📁 Project Structure
 
-web-nudge-crm/
+web-LoopIn/
 ├── public/
 ├── src/
 │   ├── components/
@@ -159,8 +159,8 @@ web-nudge-crm/
 
 1. Clone the repository
 
-git clone https://github.com/Jahnavi12007/nudge-crm.git
-cd nudge-crm
+git clone https://github.com/Jahnavi12007/LoopIn-crm.git
+cd LoopIn-crm
 
 2. Install dependencies
 
@@ -194,7 +194,7 @@ package.json.
 
 🎯 Target Users
 
-Nudge is designed for small, WhatsApp-first businesses such as:
+Loopin is designed for small, WhatsApp-first businesses such as:
 
 Salons and beauty businesses
 
@@ -230,7 +230,7 @@ Production deployment and monitoring
 
 📌 Current Status
 
-Nudge is an actively developed project. The current version focuses on
+Loopin is an actively developed project. The current version focuses on
 validating the core CRM workflow and user experience before introducing
 production payment infrastructure and additional integrations.
 
@@ -242,4 +242,4 @@ B.Tech Computer Science & Engineering
 
 GitHub: @Jahnavi12007
 
-If Nudge is useful to you, feel free to ⭐ the repository.
+If Loopin is useful to you, feel free to ⭐ the repository.
