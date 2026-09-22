@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
             onClick={() => window.location.reload()}
             className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground focus-ring"
           >
-            Reload Nudge
+            Reload LoopIn
           </button>
         </div>
       );

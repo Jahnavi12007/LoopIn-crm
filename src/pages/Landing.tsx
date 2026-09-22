@@ -43,7 +43,7 @@ const STEPS = [
 const FAQS = [
   {
     q: "Do I need the WhatsApp Business API?",
-    a: "No. Nudge opens WhatsApp with your message pre-filled — you press send. When you're ready for the official API later, Nudge is built to add it without changing how you work.",
+    a: "No. LoopIn opens WhatsApp with your message pre-filled — you press send. When you're ready for the official API later, LoopIn is built to add it without changing how you work.",
   },
   {
     q: "Is my customer data safe?",
@@ -51,7 +51,7 @@ const FAQS = [
   },
   {
     q: "Can I use it on my phone?",
-    a: "Yes — Nudge is mobile-first. Today's follow-ups, WhatsApp, calling, adding customers and recording payments are all one tap away on your phone.",
+    a: "Yes — LoopIn is mobile-first. Today's follow-ups, WhatsApp, calling, adding customers and recording payments are all one tap away on your phone.",
   },
   {
     q: "What does the Free plan include?",
@@ -59,7 +59,7 @@ const FAQS = [
   },
   {
     q: "Do I need training to use it?",
-    a: "If you can use WhatsApp, you can use Nudge. The dashboard shows exactly who to contact today and what to do next — no training needed.",
+    a: "If you can use WhatsApp, you can use LoopIn. The dashboard shows exactly who to contact today and what to do next — no training needed.",
   },
 ];
 
@@ -77,7 +77,7 @@ export default function Landing() {
         <div className="container flex h-16 items-center justify-between">
           <span className="flex items-center gap-2.5">
             <LogoMark />
-            <span className="font-display text-xl font-semibold tracking-tight">Nudge</span>
+            <span className="font-display text-xl font-semibold tracking-tight">LoopIn</span>
           </span>
           <nav aria-label="Landing" className="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex">
             <a href="#how" className="hover:text-foreground">How it works</a>
@@ -306,7 +306,7 @@ export default function Landing() {
         <div className="container flex flex-col items-center justify-between gap-4 sm:flex-row">
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
             <LogoMark className="h-6 w-6" />
-            © {new Date().getFullYear()} Nudge — WhatsApp CRM for small businesses
+            © {new Date().getFullYear()} LoopIn — WhatsApp CRM for small businesses
           </span>
           <div className="flex gap-5 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground">Features</a>

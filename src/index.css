@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Nudge design system — deep forest green, warm cream, gold accent.
+/* LoopIn design system — deep forest green, warm cream, gold accent.
    All colors in HSL. */
 
 @layer base {
@@ -93,7 +93,7 @@
 }
 
 /* Subtle entrance for cards & lists */
-@keyframes nudge-fade-up {
+@keyframes LoopIn-fade-up {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -105,10 +105,10 @@
 }
 
 .animate-fade-up {
-  animation: nudge-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: LoopIn-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes nudge-pop {
+@keyframes LoopIn-pop {
   0% {
     opacity: 0;
     transform: scale(0.96);
@@ -120,5 +120,5 @@
 }
 
 .animate-pop {
-  animation: nudge-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: LoopIn-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

@@ -13,7 +13,7 @@ import type { Business, Customer, CustomerTag, DataSnapshot } from "@/types";
 
 export const DEMO_BUSINESS_ID = "b_demo";
 const DEMO_USER_ID = "u_demo";
-const DEMO_EMAIL = "demo@nudge.app";
+const DEMO_EMAIL = "demo@LoopIn.app";
 const DATA_KEY = `data.${DEMO_BUSINESS_ID}`;
 
 function iso(daysFromNow: number): string {

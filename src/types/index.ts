@@ -1,4 +1,4 @@
-/** Core domain types for Nudge. Single source of truth for the data layer. */
+/** Core domain types for LoopIn. Single source of truth for the data layer. */
 
 export type BusinessCategory =
   | "salon"

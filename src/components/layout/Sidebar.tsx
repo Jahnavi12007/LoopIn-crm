@@ -31,7 +31,7 @@ export function Sidebar() {
         className="flex items-center gap-2.5 px-6 pb-2 pt-6 text-left focus-ring rounded-none"
       >
         <LogoMark />
-        <span className="font-display text-xl font-semibold tracking-tight text-white">Nudge</span>
+        <span className="font-display text-xl font-semibold tracking-tight text-white">LoopIn</span>
       </button>
 
       <nav aria-label="Main" className="mt-6 flex-1 space-y-1 px-3">

@@ -4,7 +4,7 @@
  * the UI — the db service is the only consumer of this module.
  */
 
-const PREFIX = "nudge.v1.";
+const PREFIX = "LoopIn.v1.";
 
 function readRaw<T>(key: string): T | null {
   try {

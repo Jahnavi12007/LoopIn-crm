@@ -240,7 +240,7 @@ function NotificationsTab() {
     <div className="max-w-xl space-y-3">
       {(
         [
-          { key: "followUpReminders", label: "Follow-up reminders", hint: "Nudge me about follow-ups due today and overdue ones." },
+          { key: "followUpReminders", label: "Follow-up reminders", hint: "LoopIn me about follow-ups due today and overdue ones." },
           { key: "paymentReminders", label: "Payment reminders", hint: "Tell me when payments become overdue." },
           { key: "dailySummary", label: "Daily summary", hint: "A morning snapshot of who to contact today." },
         ] as const

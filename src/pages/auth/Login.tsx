@@ -35,7 +35,7 @@ export default function Login() {
       subtitle="Log in to your customer follow-up workspace."
       footer={
         <>
-          New to Nudge?{" "}
+          New to LoopIn?{" "}
           <Link to="/signup" className="font-semibold text-forest-700 hover:underline focus-ring rounded">
             Start free
           </Link>
