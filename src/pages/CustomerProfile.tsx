@@ -1,330 +1,456 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { ArchiveRestore, ArrowUpDown, ChevronRight, Search, UserPlus, Users } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Archive,
+  ArrowLeft,
+  BellRing,
+  ChevronRight,
+  ClipboardList,
+  MessageSquarePlus,
+  Pencil,
+  Phone,
+  Receipt,
+  Wallet,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import { PageHeader } from "@/components/common/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { EmptyState } from "@/components/common/EmptyState";
 import { AvatarInitials } from "@/components/common/AvatarInitials";
-import { TagPill } from "@/components/common/Badges";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InvoiceStatusBadge, TagPill } from "@/components/common/Badges";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { FollowUpCard, RescheduleDialog } from "@/components/common/FollowUpCard";
 import { useQuickActions } from "@/components/modals/QuickActions";
 import { useAuth } from "@/context/AuthContext";
 import { useDbAction, useSnapshot } from "@/hooks/useData";
-import { useDebounce } from "@/hooks/useDebounce";
-import { computeCustomerStats } from "@/services/selectors";
-import { formatAmount, formatRelativeTime } from "@/lib/format";
-import { CUSTOMER_TAG_LABELS } from "@/types";
-import type { CustomerTag } from "@/types";
-import { cn } from "@/lib/utils";
+import { computeCustomerStats, invoiceBreakdown } from "@/services/selectors";
+import { formatAmount, formatDateLong, formatRelativeTime, todayISO } from "@/lib/format";
+import { buildCallLink } from "@/lib/whatsapp";
 import * as db from "@/services/db";
+import { FOLLOW_UP_REASON_LABELS } from "@/types";
+import type { Activity } from "@/types";
 
-type SortKey = "recent" | "name" | "pending" | "next-followup";
-type View = "active" | "leads" | "archived";
-const PAGE_SIZE = 20;
+const ACTIVITY_ICONS: Record<Activity["type"], LucideIcon> = {
+  customer_added: MessageSquarePlus,
+  note: ClipboardList,
+  whatsapp: BellRing,
+  call: Phone,
+  followup_scheduled: BellRing,
+  followup_completed: BellRing,
+  followup_rescheduled: BellRing,
+  payment: Wallet,
+  invoice: Receipt,
+};
 
-export default function Customers() {
+export default function CustomerProfile() {
+  const { customerId } = useParams<{ customerId: string }>();
   const { business } = useAuth();
   const snapshot = useSnapshot();
+  const navigate = useNavigate();
   const quickActions = useQuickActions();
   const currency = business?.currency ?? "INR";
-  const [searchParams, setSearchParams] = useSearchParams();
-  const view: View = searchParams.get("view") === "leads" ? "leads" : searchParams.get("view") === "archived" ? "archived" : "active";
 
-  const setView = (next: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (next === "active") params.delete("view");
-    else params.set("view", next);
-    setSearchParams(params, { replace: true });
-    setVisibleCount(PAGE_SIZE);
-  };
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [note, setNote] = useState("");
 
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 200);
-  const [tagFilter, setTagFilter] = useState<CustomerTag | "all">("all");
-  const [sortKey, setSortKey] = useState<SortKey>("recent");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const customer = snapshot.customers.find((c) => c.id === customerId);
+  const stats = useMemo(() => (customer ? computeCustomerStats(snapshot, customer.id) : null), [snapshot, customer]);
 
-  const rows = useMemo(() => {
-    const query = debouncedSearch.trim().toLowerCase();
-    let list = snapshot.customers
-      .filter((c) => (view === "archived" ? c.archived : !c.archived && (view === "leads" ? c.type === "lead" : c.type !== "lead")))
-      .filter((c) => (tagFilter === "all" ? true : c.tags.includes(tagFilter)))
-      .filter((c) =>
-        query
-          ? c.name.toLowerCase().includes(query) ||
-            c.phone.replace(/\D/g, "").includes(query.replace(/\D/g, "") || "\u0000") ||
-            c.tags.some((t) => CUSTOMER_TAG_LABELS[t].toLowerCase().includes(query))
-          : true,
-      )
-      .map((c) => ({ customer: c, stats: computeCustomerStats(snapshot, c.id) }));
-
-    list.sort((a, b) => {
-      switch (sortKey) {
-        case "name":
-          return a.customer.name.localeCompare(b.customer.name);
-        case "pending":
-          return b.stats.pending - a.stats.pending;
-        case "next-followup": {
-          const aNext = a.stats.nextFollowUp?.date ?? "9999";
-          const bNext = b.stats.nextFollowUp?.date ?? "9999";
-          return aNext.localeCompare(bNext);
-        }
-        default:
-          return b.customer.createdAt.localeCompare(a.customer.createdAt);
-      }
-    });
-    return list;
-  }, [snapshot, debouncedSearch, tagFilter, sortKey, view]);
-
-  const restoreCustomer = useDbAction(
-    (businessId: string, id: string) => db.setCustomerArchived(businessId, id, false),
-    { successMessage: "Customer restored" },
+  const activities = useMemo(
+    () => snapshot.activities.filter((a) => a.customerId === customerId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [snapshot.activities, customerId],
   );
 
-  const visible = rows.slice(0, visibleCount);
-  const hasFilters = debouncedSearch.trim() !== "" || tagFilter !== "all";
+  const followUps = useMemo(
+    () =>
+      snapshot.followUps
+        .filter((f) => f.customerId === customerId)
+        .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
+    [snapshot.followUps, customerId],
+  );
+
+  const logCall = useDbAction(
+    (businessId: string, id: string) => db.logContactActivity(businessId, id, "call"),
+    { successMessage: null },
+  );
+  const archiveCustomer = useDbAction(
+    (businessId: string, id: string, archived: boolean) => db.setCustomerArchived(businessId, id, archived),
+    { successMessage: (id: string, archived: boolean) => (archived ? "Customer archived" : "Customer restored") },
+  );
+  const addNote = useDbAction(
+    (businessId: string, id: string, text: string) => db.addNote(businessId, id, text),
+    { successMessage: "Note added" },
+  );
+  const addInvoice = useDbAction(db.addInvoice, { successMessage: "Charge added" });
+  const applyCreditAction = useDbAction(
+    (businessId: string, input: { customerId: string; invoiceId: string; amount: number }) =>
+      db.applyCredit(businessId, input),
+    { successMessage: "Customer credit applied" },
+  );
+
+  if (!customer || !stats) {
+    return (
+      <div className="animate-fade-up">
+        <EmptyState
+          icon={Pencil}
+          title="Customer not found."
+          description="This customer may have been removed."
+          action={
+            <Button variant="outline" onClick={() => navigate("/customers")}>
+              Back to Customers
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const nextPending = followUps.find((f) => f.status === "pending");
+  const pastFollowUps = followUps.filter((f) => f.status !== "pending");
 
   return (
     <div className="animate-fade-up">
-      <PageHeader
-        title="Customers"
-        description={
-          view === "leads"
-            ? `${rows.length} ${rows.length === 1 ? "lead" : "leads"} waiting to convert`
-            : view === "archived"
-              ? `${rows.length} archived ${rows.length === 1 ? "customer" : "customers"} — history is kept, restore anytime`
-              : `${rows.length} ${rows.length === 1 ? "customer" : "customers"}${hasFilters ? " matching your filters" : ""}`
-        }
-        actions={
-          <Button onClick={() => quickActions.openCustomerForm()}>
-            <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-            Add Customer
-          </Button>
-        }
-      />
+      <Link
+        to="/customers"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-ring rounded"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Customers
+      </Link>
 
-      {/* Active customers / leads / archived */}
-      <Tabs value={view} onValueChange={setView} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="active">All Customers</TabsTrigger>
-          <TabsTrigger value="leads">Leads</TabsTrigger>
-          <TabsTrigger value="archived">Archived</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Search + filters */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            type="search"
-            placeholder="Search by name, phone, or tag…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setVisibleCount(PAGE_SIZE);
-            }}
-            className="pl-9"
-            aria-label="Search customers"
-          />
+      {/* Header */}
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <AvatarInitials name={customer.name} className="h-14 w-14 text-lg" />
+            <div className="min-w-0">
+              <h1 className="font-display text-2xl font-semibold tracking-tight">{customer.name}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">{customer.phone}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {customer.type === "lead" ? <TagPill tag="new" /> : null}
+                {customer.tags.map((tag) => (
+                  <TagPill key={tag} tag={tag} />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button variant="ghost" size="icon" aria-label="Edit customer" onClick={() => quickActions.openCustomerForm(customer)}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={customer.archived ? "Restore customer" : "Archive customer"}
+              onClick={() => setArchiveOpen(true)}
+            >
+              <Archive className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Select value={tagFilter} onValueChange={(v) => { setTagFilter(v as CustomerTag | "all"); setVisibleCount(PAGE_SIZE); }}>
-            <SelectTrigger className="w-[140px]" aria-label="Filter by tag">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tags</SelectItem>
-              {(Object.keys(CUSTOMER_TAG_LABELS) as CustomerTag[]).map((t) => (
-                <SelectItem key={t} value={t}>
-                  {CUSTOMER_TAG_LABELS[t]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-            <SelectTrigger className="w-[168px]" aria-label="Sort customers">
-              <ArrowUpDown className="mr-1 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Recently added</SelectItem>
-              <SelectItem value="name">Name (A–Z)</SelectItem>
-              <SelectItem value="pending">Highest pending</SelectItem>
-              <SelectItem value="next-followup">Next follow-up</SelectItem>
-            </SelectContent>
-          </Select>
+
+        {/* Primary actions */}
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Button
+            className="bg-forest-600 hover:bg-forest-700"
+            onClick={() => quickActions.openMessageComposer({ customer, followUp: nextPending ?? null, invoice: stats.openInvoices[0] ?? null })}
+          >
+            <WhatsAppIcon className="mr-1.5 h-4 w-4" />
+            WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.open(buildCallLink(customer.phone), "_self");
+              void logCall(customer.id);
+            }}
+          >
+            <Phone className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Call
+          </Button>
+          <Button variant="outline" onClick={() => quickActions.openFollowUpForm({ customerId: customer.id })}>
+            <BellRing className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Follow-up
+          </Button>
+          <Button variant="outline" onClick={() => quickActions.openPaymentForm({ customerId: customer.id })}>
+            <Wallet className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Payment
+          </Button>
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        hasFilters ? (
-          <EmptyState
-            icon={Search}
-            title="No customers match your search."
-            description="Try a different name, phone number, or clear the filters."
-          />
-        ) : view === "archived" ? (
-          <EmptyState
-            icon={ArchiveRestore}
-            title="No archived customers."
-            description="When you archive a customer, they'll be kept safely here with their full history."
-          />
-        ) : view === "leads" ? (
-          <EmptyState
-            icon={UserPlus}
-            title="No leads yet."
-            description="Add a customer with type “Lead” to track people who haven't bought yet."
-            action={
-              <Button onClick={() => quickActions.openCustomerForm()}>
-                <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Add Lead
-              </Button>
-            }
-          />
-        ) : (
-          <EmptyState
-            icon={Users}
-            title="Your customer list is empty."
-            description="Add customers one by one — it takes less than 30 seconds each."
-            action={
-              <Button onClick={() => quickActions.openCustomerForm()}>
-                <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Add your first customer
-              </Button>
-            }
-          />
-        )
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-soft md:block">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-cream-50/60 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th scope="col" className="px-5 py-3">Customer</th>
-                  <th scope="col" className="px-5 py-3">Tags</th>
-                  <th scope="col" className="px-5 py-3 text-right">Pending</th>
-                  <th scope="col" className="px-5 py-3">Last contacted</th>
-                  <th scope="col" className="px-5 py-3">Next follow-up</th>
-                  <th scope="col" className="w-10" aria-label="Open" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map(({ customer, stats }) => (
-                  <tr key={customer.id} className="border-b border-border/60 last:border-0 transition-colors hover:bg-cream-50/50">
-                    <td className="px-5 py-3.5">
-                      <Link to={`/customers/${customer.id}`} className="flex items-center gap-3 focus-ring rounded">
-                        <AvatarInitials name={customer.name} className="h-9 w-9" />
-                        <span>
-                          <span className="block font-semibold text-foreground">{customer.name}</span>
-                          <span className="block text-xs text-muted-foreground">{customer.phone}</span>
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="flex flex-wrap gap-1">
-                        {customer.tags.slice(0, 2).map((t) => (
-                          <TagPill key={t} tag={t} />
-                        ))}
-                      </span>
-                    </td>
-                    <td className={cn("px-5 py-3.5 text-right font-semibold", stats.pending > 0 ? "text-rose-600" : "text-forest-600")}>
-                      {stats.pending > 0 ? formatAmount(stats.pending, currency) : "Settled"}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted-foreground">
-                      {stats.lastContactedAt ? formatRelativeTime(stats.lastContactedAt) : "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted-foreground">
-                      {stats.nextFollowUp ? formatDateSafe(stats.nextFollowUp.date) : "—"}
-                    </td>
-                    <td className="px-2 py-3.5">
-                      {view === "archived" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1.5 px-2 text-xs"
-                          onClick={() => void restoreCustomer(customer.id)}
-                        >
-                          <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
-                          Restore
-                        </Button>
-                      ) : (
-                        <Link to={`/customers/${customer.id}`} aria-label={`Open ${customer.name}`} className="focus-ring rounded p-1 text-muted-foreground hover:text-foreground">
-                          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <div className="space-y-6 lg:col-span-3">
+          {/* Overview */}
+          <section aria-labelledby="overview-heading" className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <h2 id="overview-heading" className="font-display text-base font-semibold">
+              Customer Overview
+            </h2>
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {[
+                { label: "Total billed", value: formatAmount(stats.billed, currency) },
+                { label: "Total paid", value: formatAmount(stats.paid, currency), tone: "text-forest-700" },
+                { label: "Pending", value: formatAmount(stats.pending, currency), tone: stats.pending > 0 ? "text-rose-600" : "text-forest-600" },
+                { label: "Customer credit", value: formatAmount(stats.credit, currency), tone: stats.credit > 0 ? "text-gold-700" : undefined },
+              ].map((item) => (
+                <div key={item.label}>
+                  <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                  <p className={`mt-1 font-display text-lg font-semibold ${item.tone ?? ""}`}>
+                    {item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Last contacted {stats.lastContactedAt ? formatRelativeTime(stats.lastContactedAt) : "—"}
+              {stats.credit > 0 ? " · credit/advance is applied from the invoice list below" : ""}
+            </p>
+            {customer.notes ? (
+              <p className="mt-4 rounded-xl bg-cream-50 px-3.5 py-3 text-sm text-foreground/90">{customer.notes}</p>
+            ) : null}
+          </section>
 
-          {/* Mobile cards */}
-          <div className="space-y-2.5 md:hidden">
-            {visible.map(({ customer, stats }) => (
-              <Link
-                key={customer.id}
-                to={`/customers/${customer.id}`}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-soft active:scale-[0.99] transition-transform focus-ring"
-              >
-                <AvatarInitials name={customer.name} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-sm font-semibold">{customer.name}</span>
-                  </span>
-                  <span className="mt-0.5 flex flex-wrap gap-1">
-                    {customer.tags.slice(0, 2).map((t) => (
-                      <TagPill key={t} tag={t} />
-                    ))}
-                  </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  {stats.pending > 0 ? (
-                    <span className="block text-sm font-bold text-rose-600">{formatAmount(stats.pending, currency)}</span>
-                  ) : null}
-                  <span className="block text-[11px] text-muted-foreground">
-                    {stats.lastContactedAt ? formatRelativeTime(stats.lastContactedAt) : "New"}
-                  </span>
-                </span>
-                {view === "archived" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0 gap-1.5 px-2 text-xs"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void restoreCustomer(customer.id);
-                    }}
-                  >
-                    <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
-                    Restore
-                  </Button>
-                ) : (
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                )}
-              </Link>
-            ))}
-          </div>
+          {/* Invoices */}
+          <section aria-labelledby="invoices-heading" className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-center justify-between">
+              <h2 id="invoices-heading" className="font-display text-base font-semibold">
+                Payments
+              </h2>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    const amount = window.prompt("Charge amount?");
+                    const parsed = amount ? Number(amount.replace(/[^\d.]/g, "")) : 0;
+                    if (parsed > 0) void addInvoice({ customerId: customer.id, amount: parsed, dueDate: todayISO() });
+                  }}
+                >
+                  Add charge
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => quickActions.openPaymentForm({ customerId: customer.id })}>
+                  Record payment
+                </Button>
+              </div>
+            </div>
+            {snapshot.invoices.filter((i) => i.customerId === customer.id).length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No charges yet. Add one to start tracking what this customer owes.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border/70">
+                {snapshot.invoices
+                  .filter((i) => i.customerId === customer.id)
+                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                  .map((invoice) => {
+                    const breakdown = invoiceBreakdown(snapshot, invoice);
+                    return (
+                      <li key={invoice.id} className="flex items-center justify-between gap-3 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold">
+                            {invoice.reference}
+                            {breakdown.paid > 0 && breakdown.pending > 0 ? (
+                              <span className="ml-2 text-xs font-medium text-muted-foreground">
+                                {formatAmount(breakdown.paid, currency)} paid · {formatAmount(breakdown.pending, currency)} pending
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Due {invoice.dueDate ? formatDateLong(invoice.dueDate) : "—"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {stats.credit > 0 && breakdown.pending > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 border-gold-300 px-2 text-[11px] text-gold-800 hover:bg-gold-50"
+                              onClick={() =>
+                                void applyCreditAction({
+                                  customerId: customer.id,
+                                  invoiceId: invoice.id,
+                                  amount: Math.min(stats.credit, breakdown.pending),
+                                })
+                              }
+                            >
+                              Apply credit
+                            </Button>
+                          ) : null}
+                          <span className="text-sm font-semibold">{formatAmount(invoice.amount, currency)}</span>
+                          <InvoiceStatusBadge status={breakdown.status} />
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </section>
 
-          {rows.length > visibleCount ? (
-            <div className="mt-5 text-center">
-              <Button variant="outline" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
-                Load more ({rows.length - visibleCount} remaining)
+          {/* Follow-ups */}
+          <section aria-labelledby="fu-heading" className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-center justify-between">
+              <h2 id="fu-heading" className="font-display text-base font-semibold">
+                Follow-ups
+              </h2>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => quickActions.openFollowUpForm({ customerId: customer.id })}>
+                Add
               </Button>
             </div>
-          ) : null}
-        </>
-      )}
+            {followUps.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">No follow-ups yet for this customer.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {nextPending ? (
+                  <FollowUpCard
+                    followUp={nextPending}
+                    customer={customer}
+                    currency={currency}
+                    pendingAmount={nextPending.reason === "payment" ? stats.pending : 0}
+                    showEditActions
+                  />
+                ) : null}
+                {pastFollowUps.length > 0 ? (
+                  <ul className="divide-y divide-border/70">
+                    {pastFollowUps.slice(0, 5).map((f) => (
+                      <li key={f.id} className="flex items-center justify-between gap-3 py-2.5">
+                        <span className="text-sm">
+                          <span className="font-medium">{FOLLOW_UP_REASON_LABELS[f.reason]}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{formatDateLong(f.date)}</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                          {f.status === "completed" ? (
+                            <span className="rounded-full bg-forest-50 px-2 py-0.5 text-[11px] font-semibold text-forest-700">Completed</span>
+                          ) : (
+                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600">Cancelled</span>
+                          )}
+                          {f.status === "completed" ? null : (
+                            <RescheduleButton followUpId={f.id} date={f.date} time={f.time} />
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Activity timeline */}
+        <section aria-labelledby="timeline-heading" className="lg:col-span-2">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <h2 id="timeline-heading" className="font-display text-base font-semibold">
+              Activity Timeline
+            </h2>
+
+            <form
+              className="mt-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (note.trim().length < 2) return;
+                void addNote(customer.id, note);
+                setNote("");
+              }}
+            >
+              <Textarea
+                rows={2}
+                placeholder="Add a note — what did you discuss?"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                aria-label="Add a note"
+              />
+              <Button type="submit" size="sm" variant="outline" className="mt-2" disabled={note.trim().length < 2}>
+                Save Note
+              </Button>
+            </form>
+
+            {activities.length === 0 ? (
+              <p className="mt-6 text-sm text-muted-foreground">No activity yet.</p>
+            ) : (
+              <ol className="mt-5 space-y-0">
+                {activities.map((activity, idx) => {
+                  const Icon = ACTIVITY_ICONS[activity.type] ?? ClipboardList;
+                  const showDateHeader =
+                    idx === 0 ||
+                    new Date(activities[idx - 1].createdAt).toDateString() !== new Date(activity.createdAt).toDateString();
+                  return (
+                    <li key={activity.id}>
+                      {showDateHeader ? (
+                        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground first:mt-0">
+                          {formatDateLong(activity.createdAt.slice(0, 10))}
+                        </p>
+                      ) : null}
+                      <div className="relative flex gap-3 pb-5">
+                        {idx < activities.length - 1 ? (
+                          <span className="absolute left-[15px] top-8 h-full w-px bg-border" aria-hidden="true" />
+                        ) : null}
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-50 text-forest-700">
+                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 pt-1">
+                          <p className="text-sm text-foreground">{activity.message}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(activity.createdAt)}</p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <ConfirmDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        title={customer.archived ? "Restore customer?" : "Archive customer?"}
+        description={
+          customer.archived
+            ? "This customer will reappear in your customer list."
+            : "They'll be hidden from your lists. Their history is kept and you can restore them anytime."
+        }
+        confirmLabel={customer.archived ? "Restore" : "Archive"}
+        onConfirm={async () => {
+          await archiveCustomer(customer.id, !customer.archived);
+          if (!customer.archived) navigate("/customers");
+        }}
+      />
+
+      {/* Edit modal handled via quick actions (preloaded) */}
     </div>
   );
 }
 
-function formatDateSafe(dateISO: string): string {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en", { day: "numeric", month: "short" });
+function RescheduleButton({ followUpId, date, time }: { followUpId: string; date: string; time: string }) {
+  const [open, setOpen] = useState(false);
+  const reschedule = useDbAction(
+    (businessId: string, id: string, d: string, t: string) => db.rescheduleFollowUp(businessId, id, d, t),
+    { successMessage: "Follow-up rescheduled" },
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs font-semibold text-forest-700 hover:underline focus-ring rounded"
+      >
+        Reschedule
+        <ChevronRight className="inline h-3 w-3" aria-hidden="true" />
+      </button>
+      <RescheduleDialog
+        open={open}
+        onOpenChange={setOpen}
+        defaultDate={date}
+        defaultTime={time}
+        onSave={async (d, t) => {
+          await reschedule(followUpId, d, t);
+        }}
+      />
+    </>
+  );
 }
